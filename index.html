@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Online Voting System</title>
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI'; }
+
+body {
+height:100vh;
+background: linear-gradient(135deg,#667eea,#764ba2,#ff758c);
+display:flex; justify-content:center; align-items:center;
+}
+
+.container {
+width:360px;
+padding:25px;
+border-radius:20px;
+background:rgba(255,255,255,0.15);
+color:white;
+text-align:center;
+}
+
+input,button {
+width:100%;
+padding:10px;
+margin:8px 0;
+border-radius:8px;
+border:none;
+}
+
+button { background:white; font-weight:bold; cursor:pointer; }
+.back-btn { background:#ff4d6d; color:white; }
+.hidden { display:none; }
+
+#popup {
+position:fixed;
+top:50%; left:50%;
+transform:translate(-50%,-50%);
+padding:20px;
+border-radius:10px;
+color:white;
+text-align:center;
+}
+
+.success { background:#00b09b; }
+.error { background:#ff416c; }
+.warning { background:#f7971e; color:black; }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>🗳 Voting System</h2>
+
+<!-- MENU -->
+<div id="menu">
+<button onclick="showRegister()">Register</button>
+<button onclick="showLogin()">Login + eKYC</button>
+<button onclick="showResults()">Show Results</button>
+<button onclick="deleteAll()">Delete Data</button>
+<button onclick="exitApp()">Exit</button>
+</div>
+
+<!-- REGISTER -->
+<div id="registerBox" class="hidden">
+<h3>Register</h3>
+
+<input id="regUser" placeholder="Username" autocomplete="off">
+<input id="aadhaar" placeholder="Aadhaar Number" autocomplete="off">
+<input id="mobile" placeholder="Mobile Number (10 digits)" autocomplete="off">
+
+<button onclick="sendOTP()">Send OTP</button>
+
+<div style="display:flex; gap:5px;">
+<input id="otpInput" placeholder="Enter OTP" style="flex:1;" autocomplete="off">
+<button onclick="verifyOTP()" style="flex:1;">Verify</button>
+</div>
+
+<input id="regPass" type="password" placeholder="Password" autocomplete="new-password">
+
+<button onclick="register()">Submit</button>
+
+<button class="back-btn" onclick="back()">Back</button>
+</div>
+
+<!-- LOGIN -->
+<div id="loginBox" class="hidden">
+<h3>Login</h3>
+
+<input id="loginUser" placeholder="Username" autocomplete="off">
+<input id="loginAadhaar" placeholder="Aadhaar Number" autocomplete="off">
+<input id="loginPass" type="password" placeholder="Password" autocomplete="new-password">
+
+<button onclick="login()">Login</button>
+<button class="back-btn" onclick="back()">Back</button>
+</div>
+
+<!-- KYC -->
+<div id="kycBox" class="hidden">
+<h3>eKYC Verification</h3>
+<input id="kycAadhaar" placeholder="Re-enter Aadhaar" autocomplete="off">
+<button onclick="verifyKYC()">Verify</button>
+</div>
+
+<!-- VOTE -->
+<div id="voteBox" class="hidden">
+<h3>Vote</h3>
+<button onclick="vote('BJP')">BJP</button>
+<button onclick="vote('Congress')">Congress</button>
+<button onclick="vote('RSS')">RSS</button>
+<button onclick="vote('ShivSena')">Shiv Sena</button>
+<button class="back-btn" onclick="back()">⬅ Back</button>
+</div>
+
+<!-- RESULTS -->
+<div id="resultBox" class="hidden">
+<h3>Results</h3>
+<div id="result"></div>
+<button onclick="back()">⬅ Back</button>
+</div>
+
+</div>
+
+<!-- POPUP -->
+<div id="popup" class="hidden">
+<p id="popupText"></p>
+<button onclick="closePopup()">OK</button>
+</div>
+
+<script>
+
+let currentUser=null;
+let generatedOTP="";
+let otpVerified=false;
+
+// ✅ 🔴 CHANGE ONLY THIS
+const BASE_URL = "https://your-app.onrender.com";
+
+// NAV
+function hideAll(){
+menu.classList.add("hidden");
+registerBox.classList.add("hidden");
+loginBox.classList.add("hidden");
+kycBox.classList.add("hidden");
+voteBox.classList.add("hidden");
+resultBox.classList.add("hidden");
+}
+
+function back(){ hideAll(); menu.classList.remove("hidden"); }
+function showRegister(){ hideAll(); registerBox.classList.remove("hidden"); }
+function showLogin(){ hideAll(); loginBox.classList.remove("hidden"); }
+
+// POPUP
+function showPopup(msg,type){
+popupText.innerText=msg;
+popup.className=type;
+popup.classList.remove("hidden");
+}
+function closePopup(){ popup.classList.add("hidden"); }
+
+// SEND OTP
+function sendOTP(){
+let mob = mobile.value.trim();
+
+if(mob===""){
+showPopup("Enter mobile number","warning");
+return;
+}
+
+if(!/^[0-9]{10}$/.test(mob)){
+showPopup("Enter valid 10 digit mobile number","error");
+return;
+}
+
+generatedOTP = Math.floor(1000 + Math.random()*9000).toString();
+otpVerified = false;
+
+alert("OTP: "+generatedOTP);
+}
+
+// VERIFY OTP
+function verifyOTP(){
+if(otpInput.value === generatedOTP){
+otpVerified = true;
+showPopup("OTP Verified Successfully","success");
+}else{
+otpVerified = false;
+showPopup("Invalid OTP","error");
+}
+}
+
+// REGISTER
+function register(){
+if(!otpVerified){
+showPopup("Please verify OTP first","warning");
+return;
+}
+
+fetch(BASE_URL + "/register",{
+method:"POST",
+headers:{"Content-Type":"application/x-www-form-urlencoded"},
+body:`username=${regUser.value}&aadhaar=${aadhaar.value}&password=${regPass.value}`
+})
+.then(r=>r.text())
+.then(d=>{
+if(d==="success") showPopup("Registered Successfully","success");
+else showPopup("User exists","error");
+});
+}
+
+// LOGIN
+function login(){
+fetch(BASE_URL + "/login",{
+method:"POST",
+headers:{"Content-Type":"application/x-www-form-urlencoded"},
+body:`username=${loginUser.value}&aadhaar=${loginAadhaar.value}&password=${loginPass.value}`
+})
+.then(r=>r.text())
+.then(d=>{
+if(d==="success"){
+currentUser=loginUser.value;
+hideAll();
+kycBox.classList.remove("hidden");
+}else showPopup("Invalid login","error");
+});
+}
+
+// KYC
+function verifyKYC(){
+fetch(BASE_URL + "/kyc",{
+method:"POST",
+headers:{"Content-Type":"application/x-www-form-urlencoded"},
+body:`username=${currentUser}&aadhaar=${kycAadhaar.value}`
+})
+.then(r=>r.text())
+.then(d=>{
+if(d==="success"){
+showPopup("KYC Verified","success");
+hideAll();
+voteBox.classList.remove("hidden");
+}else showPopup("KYC Failed","warning");
+});
+}
+
+// VOTE
+function vote(p){
+fetch(BASE_URL + "/vote",{
+method:"POST",
+headers:{"Content-Type":"application/x-www-form-urlencoded"},
+body:`username=${currentUser}&party=${p}`
+})
+.then(r=>r.text())
+.then(d=>{
+if(d==="done"){
+showPopup("Vote Submitted","success");
+
+setTimeout(()=>{
+currentUser=null;
+generatedOTP="";
+otpVerified=false;
+
+regUser.value="";
+aadhaar.value="";
+mobile.value="";
+regPass.value="";
+otpInput.value="";
+loginUser.value="";
+loginAadhaar.value="";
+loginPass.value="";
+kycAadhaar.value="";
+
+back();
+},2000);
+
+}else showPopup("Already Voted","error");
+});
+}
+
+// RESULTS
+function showResults(){
+hideAll();
+resultBox.classList.remove("hidden");
+
+fetch(BASE_URL + "/results")
+.then(r=>r.text())
+.then(d=>{
+let out="";
+d.split(",").forEach(x=>{
+if(x.trim()!==""){
+out += x.replace(":", " : ") + "<br>";
+}
+});
+result.innerHTML = out;
+});
+}
+
+// DELETE
+function deleteAll(){
+fetch(BASE_URL + "/reset");
+location.reload();
+}
+
+// EXIT
+function exitApp(){
+if(confirm("Exit?")) window.close();
+}
+
+</script>
+
+</body>
+</html>
