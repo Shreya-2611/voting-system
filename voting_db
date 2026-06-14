@@ -1,0 +1,21 @@
+CREATE DATABASE voting_db;
+USE voting_db;
+
+CREATE TABLE users (
+    username VARCHAR(50) PRIMARY KEY,
+    password VARCHAR(50),
+    voted BOOLEAN DEFAULT FALSE
+);
+
+CREATE TABLE votes (
+    party VARCHAR(20) PRIMARY KEY,
+    count INT DEFAULT 0
+);
+
+INSERT INTO votes VALUES
+('BJP',0),('Congress',0),('RSS',0),('ShivSena',0);
+
+SELECT*FROM users;
+
+SELECT*FROM votes;
+
