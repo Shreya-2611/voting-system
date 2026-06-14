@@ -1,0 +1,168 @@
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.HashMap;
+import java.util.Map;
+
+public class Server {
+   static Connection conn;
+
+   public Server() {
+   }
+
+   public static void main(String[] var0) throws Exception {
+      Class.forName("com.mysql.cj.jdbc.Driver");
+      conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/voting_db", "root", "sa123");
+      ServerSocket var1 = new ServerSocket(8080);
+      System.out.println("Server running on http://localhost:8080");
+
+      while(true) {
+         Socket var2 = var1.accept();
+         BufferedReader var3 = new BufferedReader(new InputStreamReader(var2.getInputStream()));
+         BufferedWriter var4 = new BufferedWriter(new OutputStreamWriter(var2.getOutputStream()));
+         String var5 = var3.readLine();
+         if (var5 != null) {
+            if (var5.contains("/register")) {
+               handleRegister(var3, var4);
+            } else if (var5.contains("/login")) {
+               handleLogin(var3, var4);
+            } else if (var5.contains("/kyc")) {
+               handleKYC(var3, var4);
+            } else if (var5.contains("/vote")) {
+               handleVote(var3, var4);
+            } else if (var5.contains("/results")) {
+               handleResults(var4);
+            } else if (var5.contains("/reset")) {
+               handleReset(var4);
+            }
+
+            var2.close();
+         }
+      }
+   }
+
+   static String readBody(BufferedReader var0) throws Exception {
+      int var2 = 0;
+
+      String var1;
+      while(!(var1 = var0.readLine()).isEmpty()) {
+         if (var1.startsWith("Content-Length")) {
+            var2 = Integer.parseInt(var1.split(": ")[1]);
+         }
+      }
+
+      char[] var3 = new char[var2];
+      var0.read(var3, 0, var2);
+      return new String(var3);
+   }
+
+   static Map<String, String> parse(String var0) {
+      HashMap var1 = new HashMap();
+
+      for(String var5 : var0.split("&")) {
+         String[] var6 = var5.split("=");
+         if (var6.length == 2) {
+            var1.put(var6[0], var6[1]);
+         }
+      }
+
+      return var1;
+   }
+
+   static void send(BufferedWriter var0, String var1) throws Exception {
+      var0.write("HTTP/1.1 200 OK\r\n");
+      var0.write("Access-Control-Allow-Origin: *\r\n");
+      var0.write("Content-Type: text/plain\r\n\r\n");
+      var0.write(var1);
+      var0.flush();
+   }
+
+   static void handleRegister(BufferedReader var0, BufferedWriter var1) throws Exception {
+      Map var2 = parse(readBody(var0));
+
+      try {
+         PreparedStatement var3 = conn.prepareStatement("INSERT INTO users VALUES(?,?,?,false,false)");
+         var3.setString(1, (String)var2.get("username"));
+         var3.setString(2, (String)var2.get("aadhaar"));
+         var3.setString(3, (String)var2.get("password"));
+         var3.executeUpdate();
+         send(var1, "success");
+      } catch (Exception var4) {
+         send(var1, "error");
+      }
+
+   }
+
+   static void handleLogin(BufferedReader var0, BufferedWriter var1) throws Exception {
+      Map var2 = parse(readBody(var0));
+      PreparedStatement var3 = conn.prepareStatement("SELECT * FROM users WHERE username=? AND aadhaar=? AND password=?");
+      var3.setString(1, (String)var2.get("username"));
+      var3.setString(2, (String)var2.get("aadhaar"));
+      var3.setString(3, (String)var2.get("password"));
+      ResultSet var4 = var3.executeQuery();
+      send(var1, var4.next() ? "success" : "fail");
+   }
+
+   static void handleKYC(BufferedReader var0, BufferedWriter var1) throws Exception {
+      Map var2 = parse(readBody(var0));
+      PreparedStatement var3 = conn.prepareStatement("SELECT * FROM users WHERE username=? AND aadhaar=?");
+      var3.setString(1, (String)var2.get("username"));
+      var3.setString(2, (String)var2.get("aadhaar"));
+      ResultSet var4 = var3.executeQuery();
+      if (var4.next()) {
+         PreparedStatement var5 = conn.prepareStatement("UPDATE users SET kyc=true WHERE username=?");
+         var5.setString(1, (String)var2.get("username"));
+         var5.executeUpdate();
+         send(var1, "success");
+      } else {
+         send(var1, "fail");
+      }
+
+   }
+
+   static void handleVote(BufferedReader var0, BufferedWriter var1) throws Exception {
+      Map var2 = parse(readBody(var0));
+      PreparedStatement var3 = conn.prepareStatement("SELECT voted FROM users WHERE username=?");
+      var3.setString(1, (String)var2.get("username"));
+      ResultSet var4 = var3.executeQuery();
+      if (var4.next() && var4.getBoolean("voted")) {
+         send(var1, "already");
+      } else {
+         PreparedStatement var5 = conn.prepareStatement("UPDATE votes SET count=count+1 WHERE party=?");
+         var5.setString(1, (String)var2.get("party"));
+         var5.executeUpdate();
+         PreparedStatement var6 = conn.prepareStatement("UPDATE users SET voted=true WHERE username=?");
+         var6.setString(1, (String)var2.get("username"));
+         var6.executeUpdate();
+         send(var1, "done");
+      }
+   }
+
+   static void handleResults(BufferedWriter var0) throws Exception {
+      Statement var1 = conn.createStatement();
+      ResultSet var2 = var1.executeQuery("SELECT * FROM votes");
+      StringBuilder var3 = new StringBuilder();
+
+      while(var2.next()) {
+         var3.append(var2.getString("party")).append(":").append(var2.getInt("count")).append(",");
+      }
+
+      send(var0, var3.toString());
+   }
+
+   static void handleReset(BufferedWriter var0) throws Exception {
+      Statement var1 = conn.createStatement();
+      var1.executeUpdate("DELETE FROM users");
+      var1.executeUpdate("UPDATE votes SET count=0");
+      send(var0, "reset");
+   }
+}
